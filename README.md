@@ -22,7 +22,16 @@ pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-...   # only needed for find_highlights.py
 ```
 
-Requires `ffmpeg` on PATH (already present in this environment).
+Requires `ffmpeg` on PATH, and for Workflow 1's branded look, the Amiri and
+Inter fonts:
+
+```bash
+sudo apt-get install fonts-hosny-amiri fonts-inter   # Debian/Ubuntu
+fc-cache -f
+```
+
+If those aren't installed, captions still burn in (via fontconfig's automatic
+fallback) — they just won't match the intended brand look.
 
 ## Workflow 1: recitation over scenery (5-a-day format)
 
@@ -60,6 +69,32 @@ Run it once per audio+background pair. For 5 uploads a day, pair 5 different
 recitation clips with a small rotating set of background videos (3-5 good
 backgrounds reused across many clips is normal and looks fine — the audio and
 ayah text are what's different each time).
+
+### Batch mode (render your whole day's batch in one command)
+
+Copy `jobs.csv.example` to `jobs.csv`, fill in one row per clip, and run:
+
+```bash
+python3 scripts/batch_recitation_clips.py jobs.csv
+```
+
+Every row goes through the exact same brand template, so the whole day's
+output looks consistent. Each clip is still written to `clips/` individually
+for you to review before posting — nothing here auto-posts anywhere.
+
+### The font/format template
+
+Every clip uses the same look, defined once in `make_recitation_clip.py`'s
+`BRAND_*` constants: **Amiri** for the ayah text, **Inter** for the
+translation, **Inter SemiBold** for the reciter credit (top-right corner).
+Change those constants once to re-brand every future clip.
+
+One real gotcha I hit building this: there's also a font called "Amiri
+**Quran**" (a separate package/variant) that looks tempting because its name
+says "Quran" — don't use it. It only shapes correctly with the exact special
+Unicode sequence from the official Tanzil Uthmani text source; fed ordinary
+typed or API text, it renders as broken, disconnected letterforms. Plain
+"Amiri" is the general-purpose version and renders correctly with any text.
 
 ## Workflow 2: lecture highlight clipping
 
@@ -105,8 +140,10 @@ source_videos/
   (lecture videos)         Long lecture recordings (Workflow 2)
 scripts/
   make_recitation_clip.py  Workflow 1: audio + background + ayah text -> vertical clip
+  batch_recitation_clips.py Workflow 1: render a whole CSV job list in one run
   transcribe.py            Workflow 2: source video -> timestamped transcript (faster-whisper)
   find_highlights.py       Workflow 2: transcript -> candidate highlight timestamps + hooks (Claude)
   make_clips.py            Workflow 2: highlights -> vertical clips with burned-in captions (ffmpeg)
+jobs.csv.example          Template for batch_recitation_clips.py — copy to jobs.csv
 clips/                     Output: ready-to-review vertical clips + caption sidecars
 ```

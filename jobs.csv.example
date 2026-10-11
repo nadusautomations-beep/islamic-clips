@@ -1,0 +1,6 @@
+audio,background,reciter,reference,surah,ayah_start,ayah_end,arabic_text,translation
+source_videos/audio/dosari_fatiha.mp3,source_videos/backgrounds/sunset_clouds.mp4,Yasser Al-Dosari,Al-Fatihah 1-7,1,1,7,,
+source_videos/audio/dosari_kahf1.mp3,source_videos/backgrounds/ocean_waves.mp4,Yasser Al-Dosari,Al-Kahf 1-10,18,1,10,,
+source_videos/audio/aymen_mulk.mp3,source_videos/backgrounds/forest_mist.mp4,Aymen,Al-Mulk 1-5,67,1,5,,
+source_videos/audio/dosari_duha.mp3,source_videos/backgrounds/mountains.mp4,Yasser Al-Dosari,Ad-Duha,93,1,11,,
+source_videos/audio/aymen_fajr.mp3,source_videos/backgrounds/sunset_clouds.mp4,Aymen,Al-Fajr 1-6,89,1,6,,

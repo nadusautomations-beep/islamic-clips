@@ -24,6 +24,15 @@ but will work on a normal machine/CI runner):
         --surah 1 --ayah-start 1 --ayah-end 7
 
 Output: clips/<audio-basename>.mp4 + a .txt sidecar with caption/hashtags/credit.
+
+Brand template (same on every clip, so the page looks consistent):
+  - Ayah text:    Amiri (apt install fonts-hosny-amiri if missing — NOTE: use the
+                  plain "Amiri" family, not "Amiri Quran": that variant only
+                  shapes correctly with the exact Tanzil Uthmani Unicode source
+                  text and renders as broken/disconnected glyphs on anything else)
+  - Translation:  Inter
+  - Credit:       Inter SemiBold, top-right corner
+See the BRAND_* constants below to change any of this in one place.
 """
 import argparse
 import json
@@ -34,6 +43,16 @@ import urllib.error
 from pathlib import Path
 
 ALQURAN_API = "https://api.alquran.cloud/v1/surah/{surah}/{edition}"
+
+# --- Brand template: change these to restyle every clip consistently ---
+BRAND_ARABIC_FONT = "Amiri"
+BRAND_ARABIC_SIZE = 64
+BRAND_TRANSLATION_FONT = "Inter"
+BRAND_TRANSLATION_SIZE = 40
+BRAND_CREDIT_FONTFILE = "/usr/share/fonts/opentype/inter/Inter-SemiBold.otf"
+BRAND_CREDIT_SIZE = 26
+BRAND_VIDEO_W = 1080
+BRAND_VIDEO_H = 1920
 
 
 def escape_for_filter(text: str) -> str:
@@ -59,10 +78,40 @@ def fetch_ayah_range(surah: int, ayah_start: int, ayah_end: int, edition: str, t
     return " ".join(picked)
 
 
-def write_srt(lines, duration: float, out_path: Path) -> None:
-    end = f"{int(duration // 3600):02d}:{int(duration % 3600 // 60):02d}:{int(duration % 60):02d},{int((duration % 1) * 1000):03d}"
-    content = "1\n00:00:00,000 --> " + end + "\n" + "\n".join(lines) + "\n"
-    out_path.write_text(content, encoding="utf-8")
+def _ass_timestamp(seconds: float) -> str:
+    cs = int(round(seconds * 100))
+    h, cs = divmod(cs, 360000)
+    m, cs = divmod(cs, 6000)
+    s, cs = divmod(cs, 100)
+    return f"{h:d}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def _ass_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("\n", "\\N").replace("{", "(").replace("}", ")")
+
+
+def write_ass(arabic_text: str, translation: str | None, duration: float, out_path: Path) -> None:
+    """Two independently-styled lines (brand-consistent fonts/sizes), stacked
+    bottom-up so they never overlap regardless of how many lines each wraps to."""
+    end = _ass_timestamp(duration)
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {BRAND_VIDEO_W}
+PlayResY: {BRAND_VIDEO_H}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,1,2,60,60,{300 if translation else 160},1
+Style: Translation,{BRAND_TRANSLATION_FONT},{BRAND_TRANSLATION_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,80,80,150,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    events = [f"Dialogue: 0,0:00:00.00,{end},Arabic,,0,0,0,,{_ass_escape(arabic_text)}"]
+    if translation:
+        events.append(f"Dialogue: 0,0:00:00.00,{end},Translation,,0,0,0,,{_ass_escape(translation)}")
+    out_path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -79,6 +128,7 @@ def main() -> None:
     parser.add_argument("--arabic-text", default=None, help="Manual Arabic caption text (skips the API call)")
     parser.add_argument("--translation", default=None, help="Manual translation caption text (skips the API call)")
     parser.add_argument("--out-dir", default="clips", help="Output directory")
+    parser.add_argument("--out-name", default=None, help="Output basename, no extension (default: the audio file's basename — pass this explicitly when batching multiple clips that reuse the same audio file, so outputs don't overwrite each other)")
     args = parser.parse_args()
 
     audio = Path(args.audio)
@@ -115,25 +165,26 @@ def main() -> None:
     reference = reference or "Reference not provided"
 
     duration = ffprobe_duration(audio)
-    base = audio.stem
+    base = args.out_name or audio.stem
     mp4_path = out_dir / f"{base}.mp4"
     txt_path = out_dir / f"{base}.txt"
 
-    vf_parts = ["scale=1080:1920:force_original_aspect_ratio=increase", "crop=1080:1920"]
+    vf_parts = [
+        f"scale={BRAND_VIDEO_W}:{BRAND_VIDEO_H}:force_original_aspect_ratio=increase",
+        f"crop={BRAND_VIDEO_W}:{BRAND_VIDEO_H}",
+    ]
 
-    srt_path = None
     if arabic_text:
-        lines = [arabic_text] + ([translation] if translation else [])
-        srt_path = out_dir / f"{base}.srt"
-        write_srt(lines, duration, srt_path)
-        vf_parts.append(f"subtitles='{escape_for_filter(str(srt_path))}'")
+        ass_path = out_dir / f"{base}.ass"
+        write_ass(arabic_text, translation, duration, ass_path)
+        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'")
 
     # Credit sits in the top corner, clear of the bottom-anchored captions
     # regardless of how many lines the ayah/translation text wraps to.
     credit_text = escape_for_filter(f"{args.reciter}")
     vf_parts.append(
-        "drawtext=fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:"
-        f"text='{credit_text}':fontcolor=white:fontsize=26:box=1:boxcolor=black@0.4:boxborderw=8:"
+        f"drawtext=fontfile={BRAND_CREDIT_FONTFILE}:"
+        f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:box=1:boxcolor=black@0.4:boxborderw=8:"
         "x=w-text_w-30:y=50"
     )
 
