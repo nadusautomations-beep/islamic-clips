@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Large media — don't commit source footage or rendered clips to git
+source_videos/*.mp4
+source_videos/*.mov
+source_videos/*.wav
+source_videos/*.mp3
+clips/*.mp4
+clips/*.srt
+
+!source_videos/.gitkeep
+!clips/.gitkeep
