@@ -1,10 +1,18 @@
 # islamic-clips
 
-Automation pipeline for turning a long lecture/recitation recording into a batch
-of ready-to-post vertical clips with burned-in captions, plus the business
-playbook in `STRATEGY.md`. **Read `STRATEGY.md` first** — especially the rights
-section before you feed it any source video you didn't record yourself or get
-explicit permission for.
+Two automation pipelines for short-form Islamic video content, plus the
+business playbook in `STRATEGY.md`. **Read `STRATEGY.md` first** — especially
+the rights section before you feed either pipeline audio/video you don't have
+clear permission to post and monetize.
+
+1. **Recitation over scenery** (`make_recitation_clip.py`) — a recitation
+   audio clip + a looping nature/landscape background + the ayah text and
+   translation burned in. This is the workflow for a "Qur'an recitation"
+   page posting several times a day.
+2. **Lecture highlight clipping** (`transcribe.py` → `find_highlights.py` →
+   `make_clips.py`) — for turning a long lecture recording into several
+   short highlight clips automatically. Use this instead if your content is
+   spoken lectures/reminders rather than recitation.
 
 ## Setup
 
@@ -16,7 +24,44 @@ export ANTHROPIC_API_KEY=sk-ant-...   # only needed for find_highlights.py
 
 Requires `ffmpeg` on PATH (already present in this environment).
 
-## Pipeline
+## Workflow 1: recitation over scenery (5-a-day format)
+
+```bash
+# 1. Put a recitation audio file + a looping nature/landscape background video here.
+#    You source these yourself — see STRATEGY.md for where it's actually safe
+#    to get both (recitation rights are real; most "free" recitation audio is
+#    licensed for non-commercial use only, not for a monetized page).
+cp /path/to/recitation.mp3 source_videos/audio/
+cp /path/to/sunset_clouds.mp4 source_videos/backgrounds/
+
+# 2a. With internet access to api.alquran.cloud (works on your own machine;
+#     blocked in some sandboxed dev environments), auto-fetch the ayah text:
+python3 scripts/make_recitation_clip.py \
+    --audio source_videos/audio/recitation.mp3 \
+    --background source_videos/backgrounds/sunset_clouds.mp4 \
+    --reciter "Yasser Al-Dosari" \
+    --surah 1 --ayah-start 1 --ayah-end 7
+
+# 2b. Or type the Arabic/translation yourself (works fully offline):
+python3 scripts/make_recitation_clip.py \
+    --audio source_videos/audio/recitation.mp3 \
+    --background source_videos/backgrounds/sunset_clouds.mp4 \
+    --reciter "Yasser Al-Dosari" \
+    --reference "Al-Fatihah 1-7" \
+    --arabic-text "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ ..." \
+    --translation "In the name of Allah, the Most Gracious, the Most Merciful ..."
+
+#   -> clips/recitation.mp4  (1080x1920, looped/cropped background, ayah + translation
+#      burned in at the bottom, reciter credited top-right)
+#   -> clips/recitation.txt (caption/hashtags/rights-note sidecar)
+```
+
+Run it once per audio+background pair. For 5 uploads a day, pair 5 different
+recitation clips with a small rotating set of background videos (3-5 good
+backgrounds reused across many clips is normal and looks fine — the audio and
+ayah text are what's different each time).
+
+## Workflow 2: lecture highlight clipping
 
 ```bash
 # 1. Put your rights-cleared source video here
@@ -53,11 +98,15 @@ here.
 ## Project layout
 
 ```
-STRATEGY.md         Business playbook: rights, niche, cadence, monetization timeline
-source_videos/       Your rights-cleared source recordings + generated transcripts
+STRATEGY.md               Business playbook: rights, niche, cadence, monetization timeline
+source_videos/
+  audio/                   Recitation audio files you've sourced (Workflow 1)
+  backgrounds/             Looping nature/landscape background videos (Workflow 1)
+  (lecture videos)         Long lecture recordings (Workflow 2)
 scripts/
-  transcribe.py      Source video -> timestamped transcript (faster-whisper)
-  find_highlights.py Transcript -> candidate highlight timestamps + hooks (Claude)
-  make_clips.py       Highlights -> vertical clips with burned-in captions (ffmpeg)
-clips/               Output: ready-to-review vertical clips + caption sidecars
+  make_recitation_clip.py  Workflow 1: audio + background + ayah text -> vertical clip
+  transcribe.py            Workflow 2: source video -> timestamped transcript (faster-whisper)
+  find_highlights.py       Workflow 2: transcript -> candidate highlight timestamps + hooks (Claude)
+  make_clips.py            Workflow 2: highlights -> vertical clips with burned-in captions (ffmpeg)
+clips/                     Output: ready-to-review vertical clips + caption sidecars
 ```
