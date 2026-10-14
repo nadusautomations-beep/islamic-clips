@@ -13,6 +13,10 @@ clear permission to post and monetize.
    `make_clips.py`) — for turning a long lecture recording into several
    short highlight clips automatically. Use this instead if your content is
    spoken lectures/reminders rather than recitation.
+3. **YouTube b-roll sourcing** (`search_broll.py` → `fetch_broll.py`) — finds
+   and downloads background footage that is *actually* licensed for reuse
+   (Creative Commons via YouTube's official API, verified twice), for when
+   you want background video sourced from YouTube rather than a stock site.
 
 ## Setup
 
@@ -144,6 +148,41 @@ scripts/
   transcribe.py            Workflow 2: source video -> timestamped transcript (faster-whisper)
   find_highlights.py       Workflow 2: transcript -> candidate highlight timestamps + hooks (Claude)
   make_clips.py            Workflow 2: highlights -> vertical clips with burned-in captions (ffmpeg)
+  search_broll.py          Workflow 3: search YouTube's official CC-licensed footage via its API
+  fetch_broll.py           Workflow 3: re-verify license + download approved candidates (yt-dlp)
 jobs.csv.example          Template for batch_recitation_clips.py — copy to jobs.csv
 clips/                     Output: ready-to-review vertical clips + caption sidecars
+broll/<topic>/             Workflow 3 output: downloaded clips + attribution.txt per clip
 ```
+
+## Workflow 3: YouTube b-roll (Creative Commons only)
+
+```bash
+pip install yt-dlp
+
+# One-time: console.cloud.google.com -> enable "YouTube Data API v3" -> create an API key
+export YOUTUBE_API_KEY=your_key_here
+
+# 1. Search — only returns videos YouTube's API marks as Creative Commons
+python3 scripts/search_broll.py "ocean waves drone" --topic ocean
+#   -> candidates_ocean.csv
+
+# 2. Open candidates_ocean.csv, watch the candidates, put 'y' in the 'approve'
+#    column for the ones you actually want. Don't approve based on title alone.
+
+# 3. Download the approved ones (run this on your own machine — this sandbox
+#    can reach Google's search API but youtube.com itself is blocked here)
+python3 scripts/fetch_broll.py candidates_ocean.csv
+#   -> broll/ocean/<video_id>.mp4
+#   -> broll/ocean/<video_id>_attribution.txt   (required CC BY credit line)
+#   -> fetch_log.csv (every clip's result: downloaded / refused / error, and why)
+```
+
+`fetch_broll.py` re-checks the license directly from the video itself before
+downloading anything — it doesn't trust the search step's result, since that
+API data can be stale. A clip whose license doesn't verify as Creative Commons
+is refused and logged, never downloaded "just in case." If a clip you want
+isn't CC-licensed, the compliant alternatives are: ask the channel directly
+for permission, or find the same kind of shot from a public-domain source —
+NASA, NOAA, and USGS channels are public domain by law (government works),
+independent of YouTube's CC tag, and have excellent nature/space b-roll.

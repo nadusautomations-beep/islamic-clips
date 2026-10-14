@@ -9,6 +9,9 @@ source_videos/*.wav
 source_videos/*.mp3
 clips/*.mp4
 clips/*.srt
+broll/
+candidates_*.csv
+fetch_log.csv
 
 !source_videos/.gitkeep
 !clips/.gitkeep
