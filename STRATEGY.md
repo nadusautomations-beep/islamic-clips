@@ -83,7 +83,34 @@ editor. See `README.md` for usage.
 - Consistent visual template (same font, same lower-third credit to the original
   speaker) — this is also your rights-attribution record.
 
-## 5. Monetization paths, roughly in order of speed
+## 5. What actually seems to perform, based on real research (not guessing)
+
+Checked this rather than assuming. Honest caveat up front: there's no rigorous,
+sourced ranking of "top" accounts or a breakdown of exact hook timing/caption
+length for this niche — most of what's findable is TikTok's own discovery pages
+and a handful of commentary pieces, not analytics. Treat the below as directional,
+not proven:
+
+- **Translations seem to matter for reach.** Multiple sources note that pairing
+  Arabic with an English translation lets non-Arabic-speaking viewers engage —
+  that's a real tension with the "too much text" problem we hit: the fix isn't
+  "drop translation," it's "show less at once" (shorter ayah ranges, smaller
+  font, or synced per-ayah captions so only one verse's worth of text is ever on
+  screen at a time).
+- **Thematic series beat one-off posts.** Grouping by theme (du'a for anxiety,
+  "ayah that touched you," Friday-specific surahs) gives viewers a reason to
+  follow, not just watch once.
+- **Reciter + emotional delivery matters as much as visuals.** The examples that
+  broke out widest were specifically about a striking reciter (e.g. a child's
+  recitation), not the background footage.
+- **Reposting other creators' recitations appears to suppress reach** on top of
+  the rights risk already covered in section 1 — another reason to prefer your
+  own or properly licensed audio over scraping someone else's upload.
+- **Hashtag patterns** seen repeatedly: #quranrecitation, #ayatoftheday, #fyp,
+  plus a theme-specific tag. Low-effort, worth including, don't expect them to
+  carry a weak clip.
+
+## 6. Monetization paths, roughly in order of speed
 
 1. **Affiliate / your own product** (du'a journal, short course, Arabic-learning
    resource) — can start making sales in week 1–2 once you have *any* audience,
@@ -95,7 +122,7 @@ editor. See `README.md` for usage.
 4. **Brand/organization sponsorships** — once you have a real engaged audience
    (think thousands of followers with real engagement, not just views).
 
-## 6. Weekly checklist
+## 7. Weekly checklist
 
 - [ ] 7–21 clips produced and queued
 - [ ] Rights log updated for any new source
