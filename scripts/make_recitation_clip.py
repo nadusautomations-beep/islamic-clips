@@ -62,6 +62,12 @@ BRAND_VIDEO_W = 1080
 BRAND_VIDEO_H = 1920
 SCRIM_PATH = Path(__file__).parent.parent / "assets" / "bottom_scrim.png"
 
+# Safe zones so nothing sits where TikTok/Reels/Shorts draw their own UI
+# (status bar, caption/username/audio-title bar, action-button column).
+# These are deliberately generous since the exact bars vary by platform.
+BRAND_TOP_SAFE_PX = 160   # signature line's y-position
+BRAND_BOTTOM_SAFE_PX = 300  # MarginV for the lowest text block (bottom edge up)
+
 
 def escape_for_filter(text: str) -> str:
     return text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
@@ -125,8 +131,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,{340 if translation else 220},1
-Style: Translation,{BRAND_TRANSLATION_FONT},{BRAND_TRANSLATION_SIZE},{BRAND_TRANSLATION_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,1.5,2,2,80,80,180,1
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,{BRAND_BOTTOM_SAFE_PX + 120 if translation else BRAND_BOTTOM_SAFE_PX},1
+Style: Translation,{BRAND_TRANSLATION_FONT},{BRAND_TRANSLATION_SIZE},{BRAND_TRANSLATION_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,1.5,2,2,80,80,{BRAND_BOTTOM_SAFE_PX},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -149,7 +155,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,220,1
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,{BRAND_BOTTOM_SAFE_PX},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -279,13 +285,13 @@ def main() -> None:
     # Reciter + Surah/ayah reference merged into one small, unboxed signature
     # line, top-center — a soft drop shadow carries it over bright foam or
     # dark water alike, no hard pill background.
-    signature = escape_for_filter(f"{args.reciter}   ·   {reference}" if reference and reference != "Reference not provided" else args.reciter)
+    signature = escape_for_filter(f"{args.reciter} • {reference}" if reference and reference != "Reference not provided" else args.reciter)
     signature_fontfile = escape_for_filter(args.credit_fontfile or BRAND_SIGNATURE_FONTFILE)
     text_filters.append(
         f"drawtext=fontfile='{signature_fontfile}':"
         f"text='{signature}':fontcolor={BRAND_SIGNATURE_COLOR}:fontsize={BRAND_SIGNATURE_SIZE}:"
         "shadowx=2:shadowy=2:shadowcolor=black@0.7:"
-        "x=(w-text_w)/2:y=60"
+        f"x=(w-text_w)/2:y={BRAND_TOP_SAFE_PX}"
     )
 
     fade_duration = min(args.fade_duration, duration)
