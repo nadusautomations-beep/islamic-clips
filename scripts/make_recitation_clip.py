@@ -264,9 +264,9 @@ def main() -> None:
     # Credit sits in the top corner, clear of the bottom-anchored captions
     # regardless of how many lines the ayah/translation text wraps to.
     credit_text = escape_for_filter(f"{args.reciter}")
-    credit_fontfile = args.credit_fontfile or BRAND_CREDIT_FONTFILE
+    credit_fontfile = escape_for_filter(args.credit_fontfile or BRAND_CREDIT_FONTFILE)
     vf_parts.append(
-        f"drawtext=fontfile={credit_fontfile}:"
+        f"drawtext=fontfile='{credit_fontfile}':"
         f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:box=1:boxcolor=black@0.4:boxborderw=8:"
         "x=w-text_w-30:y=50"
     )
