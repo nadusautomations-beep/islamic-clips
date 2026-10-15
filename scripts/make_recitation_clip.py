@@ -129,6 +129,8 @@ def main() -> None:
     parser.add_argument("--translation", default=None, help="Manual translation caption text (skips the API call)")
     parser.add_argument("--out-dir", default="clips", help="Output directory")
     parser.add_argument("--out-name", default=None, help="Output basename, no extension (default: the audio file's basename — pass this explicitly when batching multiple clips that reuse the same audio file, so outputs don't overwrite each other)")
+    parser.add_argument("--end-time", type=float, default=None, help="Cut the clip at this many seconds instead of running the full audio length (e.g. 32.5)")
+    parser.add_argument("--fade-duration", type=float, default=1.5, help="Length in seconds of the audio+video fade-out at the end (default 1.5s)")
     args = parser.parse_args()
 
     audio = Path(args.audio)
@@ -164,7 +166,8 @@ def main() -> None:
         reference = f"Surah {args.surah}:{args.ayah_start}-{ayah_end}"
     reference = reference or "Reference not provided"
 
-    duration = ffprobe_duration(audio)
+    full_duration = ffprobe_duration(audio)
+    duration = min(args.end_time, full_duration) if args.end_time else full_duration
     base = args.out_name or audio.stem
     mp4_path = out_dir / f"{base}.mp4"
     txt_path = out_dir / f"{base}.txt"
@@ -188,18 +191,24 @@ def main() -> None:
         "x=w-text_w-30:y=50"
     )
 
+    fade_duration = min(args.fade_duration, duration)
+    fade_start = max(0.0, duration - fade_duration)
+    vf_parts.append(f"fade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}")
+    af = f"afade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}"
+
     cmd = [
         "ffmpeg", "-y",
         "-stream_loop", "-1", "-i", str(background),
         "-i", str(audio),
         "-map", "0:v", "-map", "1:a",
-        "-shortest",
+        "-t", f"{duration:.3f}",
         "-vf", ",".join(vf_parts),
+        "-af", af,
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k",
         str(mp4_path),
     ]
-    print(f"Rendering {mp4_path} ({duration:.1f}s)...", file=sys.stderr)
+    print(f"Rendering {mp4_path} ({duration:.1f}s, fade-out last {fade_duration:.1f}s)...", file=sys.stderr)
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(result.stderr[-2000:], file=sys.stderr)
