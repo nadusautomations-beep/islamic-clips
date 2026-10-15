@@ -45,15 +45,22 @@ from pathlib import Path
 ALQURAN_API = "https://api.alquran.cloud/v1/surah/{surah}/{edition}"
 
 # --- Brand template: change these to restyle every clip consistently ---
+# "Premium calm" palette: soft gold for the ayah, warm cream for the translation
+# and signature line, warm-dark (not pure black) outlines. Colours below are
+# given in both forms: ASS uses &HAABBGGRR, ffmpeg drawtext uses 0xRRGGBB.
 BRAND_ARABIC_FONT = "Amiri"
 BRAND_ARABIC_SIZE = 64
+BRAND_ARABIC_COLOR_ASS = "&H007AC9E8"       # soft gold #E8C97A
 BRAND_TRANSLATION_FONT = "Inter"
-BRAND_TRANSLATION_SIZE = 40
-BRAND_CREDIT_FONTFILE = "/usr/share/fonts/opentype/inter/Inter-SemiBold.otf"
-BRAND_CREDIT_SIZE = 36
-BRAND_REFERENCE_SIZE = 30
+BRAND_TRANSLATION_SIZE = 36
+BRAND_TRANSLATION_COLOR_ASS = "&H00D2E9F3"  # warm cream #F3E9D2
+BRAND_OUTLINE_COLOR_ASS = "&H0008121A"      # warm near-black #1A1208, not pure black
+BRAND_SIGNATURE_FONTFILE = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
+BRAND_SIGNATURE_SIZE = 30
+BRAND_SIGNATURE_COLOR = "0xF3E9D2"          # warm cream, matches translation
 BRAND_VIDEO_W = 1080
 BRAND_VIDEO_H = 1920
+SCRIM_PATH = Path(__file__).parent.parent / "assets" / "bottom_scrim.png"
 
 
 def escape_for_filter(text: str) -> str:
@@ -118,8 +125,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,1,2,60,60,{300 if translation else 160},1
-Style: Translation,{BRAND_TRANSLATION_FONT},{BRAND_TRANSLATION_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,1,2,80,80,150,1
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,{340 if translation else 220},1
+Style: Translation,{BRAND_TRANSLATION_FONT},{BRAND_TRANSLATION_SIZE},{BRAND_TRANSLATION_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,1.5,2,2,80,80,180,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -142,7 +149,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,1,2,60,60,160,1
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},{BRAND_ARABIC_COLOR_ASS},&H000000FF,{BRAND_OUTLINE_COLOR_ASS},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,60,60,220,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -178,7 +185,7 @@ def main() -> None:
     parser.add_argument("--fade-duration", type=float, default=1.5, help="Length in seconds of the audio+video fade-out at the end (default 1.5s)")
     parser.add_argument("--ayah-times", default=None, help="Sync each ayah to when it's actually recited: 'ayah:seconds,ayah:seconds,...' e.g. '35:0,36:8.5,37:17,38:25' — each ayah's text shows only until the next one's start time. Requires --surah. Overrides the static whole-passage caption.")
     parser.add_argument("--fonts-dir", default=None, help="Folder containing font files (e.g. the extracted Amiri .ttf files). Points ffmpeg straight at them, bypassing the OS font install/cache — the reliable fix when an installed font (esp. on Windows) isn't being picked up.")
-    parser.add_argument("--credit-fontfile", default=None, help="Override the font file used for the reciter-credit text (default: the BRAND_CREDIT_FONTFILE constant, a Linux path — set this on Windows/Mac).")
+    parser.add_argument("--credit-fontfile", default=None, help="Override the font file used for the reciter/reference signature line (default: the BRAND_SIGNATURE_FONTFILE constant, a Linux path — set this on Windows/Mac).")
     args = parser.parse_args()
 
     audio = Path(args.audio)
@@ -241,13 +248,20 @@ def main() -> None:
     mp4_path = out_dir / f"{base}.mp4"
     txt_path = out_dir / f"{base}.txt"
 
-    vf_parts = [
-        f"scale={BRAND_VIDEO_W}:{BRAND_VIDEO_H}:force_original_aspect_ratio=increase",
-        f"crop={BRAND_VIDEO_W}:{BRAND_VIDEO_H}",
-    ]
-
     fontsdir_clause = f":fontsdir='{escape_for_filter(args.fonts_dir)}'" if args.fonts_dir else ""
 
+    # Background: scale/crop to frame, then a gentle premium grade (a touch
+    # more contrast+saturation, a slight warm push in the midtones, a mild
+    # vignette) — subtle, not a heavy filter.
+    bg_filters = [
+        f"scale={BRAND_VIDEO_W}:{BRAND_VIDEO_H}:force_original_aspect_ratio=increase",
+        f"crop={BRAND_VIDEO_W}:{BRAND_VIDEO_H}",
+        "eq=contrast=1.08:saturation=1.15",
+        "colorbalance=rm=0.04:bm=-0.05",
+        "vignette=PI/5.5",
+    ]
+
+    text_filters = []
     if timed_segments:
         # Fill in the last segment's open-ended "end" now that we know duration.
         timed_segments = [
@@ -256,45 +270,45 @@ def main() -> None:
         ]
         ass_path = out_dir / f"{base}.ass"
         write_ass_timed(timed_segments, duration, ass_path)
-        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
+        text_filters.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
     elif arabic_text:
         ass_path = out_dir / f"{base}.ass"
         write_ass(arabic_text, translation, duration, ass_path)
-        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
+        text_filters.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
 
-    # Reciter credit (top-right) and Surah/ayah reference (top-left) sit in the
-    # top corners, clear of the bottom-anchored captions regardless of how many
-    # lines the ayah/translation text wraps to.
-    credit_text = escape_for_filter(f"{args.reciter}")
-    credit_fontfile = escape_for_filter(args.credit_fontfile or BRAND_CREDIT_FONTFILE)
-    vf_parts.append(
-        f"drawtext=fontfile='{credit_fontfile}':"
-        f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:"
-        "box=1:boxcolor=black@0.55:boxborderw=12:"
-        "x=w-text_w-30:y=50"
+    # Reciter + Surah/ayah reference merged into one small, unboxed signature
+    # line, top-center — a soft drop shadow carries it over bright foam or
+    # dark water alike, no hard pill background.
+    signature = escape_for_filter(f"{args.reciter}   ·   {reference}" if reference and reference != "Reference not provided" else args.reciter)
+    signature_fontfile = escape_for_filter(args.credit_fontfile or BRAND_SIGNATURE_FONTFILE)
+    text_filters.append(
+        f"drawtext=fontfile='{signature_fontfile}':"
+        f"text='{signature}':fontcolor={BRAND_SIGNATURE_COLOR}:fontsize={BRAND_SIGNATURE_SIZE}:"
+        "shadowx=2:shadowy=2:shadowcolor=black@0.7:"
+        "x=(w-text_w)/2:y=60"
     )
 
-    if reference and reference != "Reference not provided":
-        reference_text = escape_for_filter(reference)
-        vf_parts.append(
-            f"drawtext=fontfile='{credit_fontfile}':"
-            f"text='{reference_text}':fontcolor=white:fontsize={BRAND_REFERENCE_SIZE}:"
-            "box=1:boxcolor=black@0.55:boxborderw=10:"
-            "x=30:y=50"
-        )
-
     fade_duration = min(args.fade_duration, duration)
+    fade_in_duration = min(1.0, duration / 4)
     fade_start = max(0.0, duration - fade_duration)
-    vf_parts.append(f"fade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}")
+    text_filters.append(f"fade=t=in:st=0:d={fade_in_duration:.3f}")
+    text_filters.append(f"fade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}")
     af = f"afade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}"
+
+    filter_complex = (
+        f"[0:v]{','.join(bg_filters)}[bg];"
+        f"[bg][2:v]overlay=0:0[scrimmed];"
+        f"[scrimmed]{','.join(text_filters)}[outv]"
+    )
 
     cmd = [
         "ffmpeg", "-y",
         "-stream_loop", "-1", "-i", str(background),
         "-i", str(audio),
-        "-map", "0:v", "-map", "1:a",
+        "-i", str(SCRIM_PATH),
+        "-filter_complex", filter_complex,
+        "-map", "[outv]", "-map", "1:a",
         "-t", f"{duration:.3f}",
-        "-vf", ",".join(vf_parts),
         "-af", af,
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "128k",
