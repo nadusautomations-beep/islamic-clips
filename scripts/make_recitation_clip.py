@@ -176,6 +176,8 @@ def main() -> None:
     parser.add_argument("--end-time", type=float, default=None, help="Cut the clip at this many seconds instead of running the full audio length (e.g. 32.5)")
     parser.add_argument("--fade-duration", type=float, default=1.5, help="Length in seconds of the audio+video fade-out at the end (default 1.5s)")
     parser.add_argument("--ayah-times", default=None, help="Sync each ayah to when it's actually recited: 'ayah:seconds,ayah:seconds,...' e.g. '35:0,36:8.5,37:17,38:25' — each ayah's text shows only until the next one's start time. Requires --surah. Overrides the static whole-passage caption.")
+    parser.add_argument("--fonts-dir", default=None, help="Folder containing font files (e.g. the extracted Amiri .ttf files). Points ffmpeg straight at them, bypassing the OS font install/cache — the reliable fix when an installed font (esp. on Windows) isn't being picked up.")
+    parser.add_argument("--credit-fontfile", default=None, help="Override the font file used for the reciter-credit text (default: the BRAND_CREDIT_FONTFILE constant, a Linux path — set this on Windows/Mac).")
     args = parser.parse_args()
 
     audio = Path(args.audio)
@@ -243,6 +245,8 @@ def main() -> None:
         f"crop={BRAND_VIDEO_W}:{BRAND_VIDEO_H}",
     ]
 
+    fontsdir_clause = f":fontsdir='{escape_for_filter(args.fonts_dir)}'" if args.fonts_dir else ""
+
     if timed_segments:
         # Fill in the last segment's open-ended "end" now that we know duration.
         timed_segments = [
@@ -251,17 +255,18 @@ def main() -> None:
         ]
         ass_path = out_dir / f"{base}.ass"
         write_ass_timed(timed_segments, duration, ass_path)
-        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'")
+        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
     elif arabic_text:
         ass_path = out_dir / f"{base}.ass"
         write_ass(arabic_text, translation, duration, ass_path)
-        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'")
+        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
 
     # Credit sits in the top corner, clear of the bottom-anchored captions
     # regardless of how many lines the ayah/translation text wraps to.
     credit_text = escape_for_filter(f"{args.reciter}")
+    credit_fontfile = args.credit_fontfile or BRAND_CREDIT_FONTFILE
     vf_parts.append(
-        f"drawtext=fontfile={BRAND_CREDIT_FONTFILE}:"
+        f"drawtext=fontfile={credit_fontfile}:"
         f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:box=1:boxcolor=black@0.4:boxborderw=8:"
         "x=w-text_w-30:y=50"
     )
