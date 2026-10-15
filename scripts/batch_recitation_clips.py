@@ -6,19 +6,30 @@ BRAND_* constants) so a day's worth of uploads look consistent.
 
 Usage:
     python3 scripts/batch_recitation_clips.py jobs.csv
+    python3 scripts/batch_recitation_clips.py jobs.csv --fonts-dir Amiri
 
-CSV columns (header row required):
-    audio,background,reciter,reference,surah,ayah_start,ayah_end,arabic_text,translation
+CSV columns (header row required; only audio/background/reciter are mandatory
+per row — everything else is optional and passed straight through to
+make_recitation_clip.py when present):
+    audio,background,reciter,reference,surah,ayah_start,ayah_end,arabic_text,
+    translation,translation_edition,end_time,fade_duration,ayah_times
 
 Leave surah/ayah_start/ayah_end blank if you're passing arabic_text/translation
 directly; leave arabic_text/translation blank if you want them auto-fetched
 from the surah/ayah fields (requires api.alquran.cloud to be reachable).
+Set translation_edition to the literal text NONE to skip translation entirely
+for that row (passes --translation-edition "").
+
+--fonts-dir is a command-line flag (not a CSV column) since it's normally the
+same folder for every clip in a batch — e.g. wherever you extracted Amiri's
+.ttf files.
 
 Example row:
-    source_videos/audio/dosari_fatiha.mp3,source_videos/backgrounds/sunset.mp4,Yasser Al-Dosari,Al-Fatihah 1-7,1,1,7,,
+    source_videos/audio/dosari_fatiha.mp3,source_videos/backgrounds/sunset.mp4,Yasser Al-Dosari,Al-Fatihah 1-7,1,1,7,,,,,,
 
 A sample jobs.csv is in this repo's root — copy and edit it for your own batch.
 """
+import argparse
 import csv
 import subprocess
 import sys
@@ -28,10 +39,12 @@ SCRIPT_DIR = Path(__file__).parent
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit(f"Usage: {sys.argv[0]} jobs.csv")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("jobs_csv")
+    parser.add_argument("--fonts-dir", default=None, help="Folder containing font files, applied to every clip in the batch")
+    args = parser.parse_args()
 
-    jobs_path = Path(sys.argv[1])
+    jobs_path = Path(args.jobs_csv)
     if not jobs_path.exists():
         sys.exit(f"Job list not found: {jobs_path}")
 
@@ -74,6 +87,17 @@ def main() -> None:
             cmd += ["--arabic-text", row["arabic_text"].strip()]
         if row.get("translation", "").strip():
             cmd += ["--translation", row["translation"].strip()]
+        translation_edition = row.get("translation_edition", "").strip()
+        if translation_edition:
+            cmd += ["--translation-edition", "" if translation_edition.upper() == "NONE" else translation_edition]
+        if row.get("end_time", "").strip():
+            cmd += ["--end-time", row["end_time"].strip()]
+        if row.get("fade_duration", "").strip():
+            cmd += ["--fade-duration", row["fade_duration"].strip()]
+        if row.get("ayah_times", "").strip():
+            cmd += ["--ayah-times", row["ayah_times"].strip()]
+        if args.fonts_dir:
+            cmd += ["--fonts-dir", args.fonts_dir]
 
         print(f"\n[{i}/{len(rows)}] {Path(audio).stem} ...", file=sys.stderr)
         result = subprocess.run(cmd)
