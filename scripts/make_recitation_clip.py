@@ -67,15 +67,30 @@ def ffprobe_duration(path: Path) -> float:
     return float(out.stdout.strip())
 
 
-def fetch_ayah_range(surah: int, ayah_start: int, ayah_end: int, edition: str, timeout: int = 10) -> str:
+def fetch_surah_ayahs(surah: int, edition: str, timeout: int = 10) -> dict[int, str]:
+    """Returns {numberInSurah: text} for every ayah in the surah, one API call."""
     url = ALQURAN_API.format(surah=surah, edition=edition)
     with urllib.request.urlopen(url, timeout=timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
-    ayahs = data["data"]["ayahs"]
-    picked = [a["text"] for a in ayahs if ayah_start <= a["numberInSurah"] <= ayah_end]
+    return {a["numberInSurah"]: a["text"] for a in data["data"]["ayahs"]}
+
+
+def fetch_ayah_range(surah: int, ayah_start: int, ayah_end: int, edition: str, timeout: int = 10) -> str:
+    ayahs = fetch_surah_ayahs(surah, edition, timeout)
+    picked = [text for num, text in sorted(ayahs.items()) if ayah_start <= num <= ayah_end]
     if not picked:
         raise ValueError(f"No ayahs {ayah_start}-{ayah_end} found in surah {surah} (edition {edition})")
     return " ".join(picked)
+
+
+def parse_ayah_times(spec: str) -> list[tuple[int, float]]:
+    """Parse '35:0,36:8.5,37:17,38:25' -> [(35, 0.0), (36, 8.5), (37, 17.0), (38, 25.0)], sorted by time."""
+    pairs = []
+    for chunk in spec.split(","):
+        ayah_str, time_str = chunk.split(":")
+        pairs.append((int(ayah_str.strip()), float(time_str.strip())))
+    pairs.sort(key=lambda p: p[1])
+    return pairs
 
 
 def _ass_timestamp(seconds: float) -> str:
@@ -114,6 +129,35 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     out_path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
 
 
+def write_ass_timed(segments: list[tuple[str, float, float]], duration: float, out_path: Path) -> None:
+    """One ayah on screen at a time: each segment's text shows only for its
+    own [start, end) window, so the caption goes in and out with the audio
+    instead of dumping the whole passage on screen at once."""
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {BRAND_VIDEO_W}
+PlayResY: {BRAND_VIDEO_H}
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Arabic,{BRAND_ARABIC_FONT},{BRAND_ARABIC_SIZE},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,1,2,60,60,160,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    events = []
+    for text, start, end in segments:
+        start = max(0.0, min(start, duration))
+        end = max(start, min(end, duration))
+        if end <= start:
+            continue
+        events.append(
+            f"Dialogue: 0,{_ass_timestamp(start)},{_ass_timestamp(end)},Arabic,,0,0,0,,{_ass_escape(text)}"
+        )
+    out_path.write_text(header + "\n".join(events) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--audio", required=True, help="Path to recitation audio file")
@@ -131,6 +175,7 @@ def main() -> None:
     parser.add_argument("--out-name", default=None, help="Output basename, no extension (default: the audio file's basename — pass this explicitly when batching multiple clips that reuse the same audio file, so outputs don't overwrite each other)")
     parser.add_argument("--end-time", type=float, default=None, help="Cut the clip at this many seconds instead of running the full audio length (e.g. 32.5)")
     parser.add_argument("--fade-duration", type=float, default=1.5, help="Length in seconds of the audio+video fade-out at the end (default 1.5s)")
+    parser.add_argument("--ayah-times", default=None, help="Sync each ayah to when it's actually recited: 'ayah:seconds,ayah:seconds,...' e.g. '35:0,36:8.5,37:17,38:25' — each ayah's text shows only until the next one's start time. Requires --surah. Overrides the static whole-passage caption.")
     args = parser.parse_args()
 
     audio = Path(args.audio)
@@ -145,8 +190,29 @@ def main() -> None:
 
     arabic_text = args.arabic_text
     translation = args.translation
+    timed_segments = None  # list of (text, start, end), set below if --ayah-times is used
 
-    if arabic_text is None and args.surah is not None and args.ayah_start is not None:
+    if args.ayah_times:
+        if not args.surah:
+            sys.exit("--ayah-times requires --surah (to know which surah's text to fetch)")
+        ayah_time_pairs = parse_ayah_times(args.ayah_times)
+        try:
+            ayah_texts = fetch_surah_ayahs(args.surah, args.arabic_edition)
+        except Exception as e:
+            sys.exit(f"Could not fetch Arabic text for --ayah-times ({e}). Can't build synced captions without it.")
+        timed_segments = []
+        for i, (ayah_num, start) in enumerate(ayah_time_pairs):
+            if ayah_num not in ayah_texts:
+                sys.exit(f"Ayah {ayah_num} not found in surah {args.surah}")
+            end = ayah_time_pairs[i + 1][1] if i + 1 < len(ayah_time_pairs) else None  # filled in once duration is known
+            timed_segments.append((ayah_texts[ayah_num], start, end))
+        print(f"Fetched {len(timed_segments)} synced ayah captions for surah {args.surah}", file=sys.stderr)
+        if args.ayah_start is None:
+            args.ayah_start = min(n for n, _ in ayah_time_pairs)
+        if args.ayah_end is None:
+            args.ayah_end = max(n for n, _ in ayah_time_pairs)
+
+    elif arabic_text is None and args.surah is not None and args.ayah_start is not None:
         ayah_end = args.ayah_end or args.ayah_start
         try:
             arabic_text = fetch_ayah_range(args.surah, args.ayah_start, ayah_end, args.arabic_edition)
@@ -177,7 +243,16 @@ def main() -> None:
         f"crop={BRAND_VIDEO_W}:{BRAND_VIDEO_H}",
     ]
 
-    if arabic_text:
+    if timed_segments:
+        # Fill in the last segment's open-ended "end" now that we know duration.
+        timed_segments = [
+            (text, start, end if end is not None else duration)
+            for text, start, end in timed_segments
+        ]
+        ass_path = out_dir / f"{base}.ass"
+        write_ass_timed(timed_segments, duration, ass_path)
+        vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'")
+    elif arabic_text:
         ass_path = out_dir / f"{base}.ass"
         write_ass(arabic_text, translation, duration, ass_path)
         vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'")
