@@ -42,6 +42,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("jobs_csv")
     parser.add_argument("--fonts-dir", default=None, help="Folder containing font files, applied to every clip in the batch")
+    parser.add_argument("--background-pool", default=None, help="Folder of pre-approved background videos to use for any row that leaves its 'background' column blank — one random pick per row. Set this up once (see fetch_broll.py) and never choose a background per clip again.")
     args = parser.parse_args()
 
     jobs_path = Path(args.jobs_csv)
@@ -57,10 +58,11 @@ def main() -> None:
     failures = []
     for i, row in enumerate(rows, start=1):
         audio = row.get("audio", "").strip()
-        background = row.get("background", "").strip()
+        background = row.get("background", "").strip() or args.background_pool
         reciter = row.get("reciter", "").strip()
         if not audio or not background or not reciter:
-            print(f"[{i}/{len(rows)}] SKIPPED: audio, background and reciter are required", file=sys.stderr)
+            print(f"[{i}/{len(rows)}] SKIPPED: audio and reciter are required, and background "
+                  f"(either this row's own, or --background-pool)", file=sys.stderr)
             failures.append(i)
             continue
 

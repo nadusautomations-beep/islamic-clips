@@ -36,11 +36,14 @@ See the BRAND_* constants below to change any of this in one place.
 """
 import argparse
 import json
+import random
 import subprocess
 import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
+
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv"}
 
 ALQURAN_API = "https://api.alquran.cloud/v1/surah/{surah}/{edition}"
 
@@ -175,7 +178,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--audio", required=True, help="Path to recitation audio file")
-    parser.add_argument("--background", required=True, help="Path to looping scenic background video (any length; it's looped/trimmed to match the audio)")
+    parser.add_argument("--background", required=True, help="Path to a looping scenic background video, OR a folder of pre-approved ones — pass a folder once you've built a pool (see fetch_broll.py) and a random video from it is picked automatically, so you stop choosing a background per clip")
     parser.add_argument("--reciter", required=True, help="Reciter name, for the credit overlay and rights sidecar")
     parser.add_argument("--reference", default=None, help="Human-readable reference for the sidecar, e.g. 'Al-Fatihah 1-7' (defaults to surah:ayah if given)")
     parser.add_argument("--surah", type=int, default=None, help="Surah number, to auto-fetch ayah text (needs api.alquran.cloud reachable)")
@@ -199,7 +202,13 @@ def main() -> None:
     if not audio.exists():
         sys.exit(f"Audio file not found: {audio}")
     if not background.exists():
-        sys.exit(f"Background video not found: {background}")
+        sys.exit(f"Background video/folder not found: {background}")
+    if background.is_dir():
+        pool = sorted(p for p in background.iterdir() if p.suffix.lower() in VIDEO_EXTENSIONS)
+        if not pool:
+            sys.exit(f"No video files ({', '.join(VIDEO_EXTENSIONS)}) found in background folder: {background}")
+        background = random.choice(pool)
+        print(f"Picked background from pool: {background.name}", file=sys.stderr)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
