@@ -37,6 +37,19 @@ fc-cache -f
 If those aren't installed, captions still burn in (via fontconfig's automatic
 fallback) — they just won't match the intended brand look.
 
+**On Windows**, installing a font through File Explorer ("Install for all
+users") often still doesn't get picked up by ffmpeg — its bundled fontconfig
+has its own cache that doesn't always notice newly-installed system fonts.
+The reliable fix: skip the OS install entirely. Download the font, extract
+the zip, and point `make_recitation_clip.py` straight at the extracted folder:
+
+```
+python make_recitation_clip.py ... --fonts-dir path\to\extracted\Amiri
+```
+
+This bypasses the OS font cache completely, so it works even when "Install"
+silently doesn't.
+
 ## Workflow 1: recitation over scenery (5-a-day format)
 
 ```bash
@@ -79,12 +92,17 @@ ayah text are what's different each time).
 Copy `jobs.csv.example` to `jobs.csv`, fill in one row per clip, and run:
 
 ```bash
-python3 scripts/batch_recitation_clips.py jobs.csv
+python3 scripts/batch_recitation_clips.py jobs.csv --fonts-dir path\to\Amiri
 ```
 
 Every row goes through the exact same brand template, so the whole day's
-output looks consistent. Each clip is still written to `clips/` individually
-for you to review before posting — nothing here auto-posts anywhere.
+output looks consistent. `--fonts-dir` (optional, see the Windows note above)
+applies to every clip in the run. Per-row CSV columns can also override
+`translation_edition` (set it to `NONE` to drop translation for just that
+row), `end_time`, `fade_duration`, and `ayah_times` — see the script's own
+`--help` for the full column list. Each clip is still written to `clips/`
+individually for you to review before posting — nothing here auto-posts
+anywhere.
 
 ### The font/format template
 
