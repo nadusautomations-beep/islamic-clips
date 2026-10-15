@@ -50,7 +50,8 @@ BRAND_ARABIC_SIZE = 64
 BRAND_TRANSLATION_FONT = "Inter"
 BRAND_TRANSLATION_SIZE = 40
 BRAND_CREDIT_FONTFILE = "/usr/share/fonts/opentype/inter/Inter-SemiBold.otf"
-BRAND_CREDIT_SIZE = 26
+BRAND_CREDIT_SIZE = 36
+BRAND_REFERENCE_SIZE = 30
 BRAND_VIDEO_W = 1080
 BRAND_VIDEO_H = 1920
 
@@ -261,15 +262,26 @@ def main() -> None:
         write_ass(arabic_text, translation, duration, ass_path)
         vf_parts.append(f"subtitles='{escape_for_filter(str(ass_path))}'{fontsdir_clause}")
 
-    # Credit sits in the top corner, clear of the bottom-anchored captions
-    # regardless of how many lines the ayah/translation text wraps to.
+    # Reciter credit (top-right) and Surah/ayah reference (top-left) sit in the
+    # top corners, clear of the bottom-anchored captions regardless of how many
+    # lines the ayah/translation text wraps to.
     credit_text = escape_for_filter(f"{args.reciter}")
     credit_fontfile = escape_for_filter(args.credit_fontfile or BRAND_CREDIT_FONTFILE)
     vf_parts.append(
         f"drawtext=fontfile='{credit_fontfile}':"
-        f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:box=1:boxcolor=black@0.4:boxborderw=8:"
+        f"text='{credit_text}':fontcolor=white:fontsize={BRAND_CREDIT_SIZE}:"
+        "box=1:boxcolor=black@0.55:boxborderw=12:"
         "x=w-text_w-30:y=50"
     )
+
+    if reference and reference != "Reference not provided":
+        reference_text = escape_for_filter(reference)
+        vf_parts.append(
+            f"drawtext=fontfile='{credit_fontfile}':"
+            f"text='{reference_text}':fontcolor=white:fontsize={BRAND_REFERENCE_SIZE}:"
+            "box=1:boxcolor=black@0.55:boxborderw=10:"
+            "x=30:y=50"
+        )
 
     fade_duration = min(args.fade_duration, duration)
     fade_start = max(0.0, duration - fade_duration)
